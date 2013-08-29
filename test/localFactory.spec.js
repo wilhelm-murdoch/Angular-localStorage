@@ -24,6 +24,28 @@ describe('angular-localStorage module', function () {
 		});
 	});
 
+	describe('when setting a 5 second expiration with set()', function() {
+		beforeEach(function() {
+			$store.set('spec', 'i will expire in 5 seconds', 5)
+		})
+
+		beforeEach(function() {
+			testValue = $store.get('spec')
+		})
+
+		it('should return the value within 3 seconds', function () {
+			setTimeout(function() {
+				expect(testValue).toBe('i will expire in 5 seconds');
+			}, 3);
+		});
+
+		it('should return null after 5 seconds', function () {
+			setTimeout(function() {
+				expect(testValue).toBe(null);
+			}, 6);
+		});
+	})
+
 	describe('when bind() $scope field to localStorage', function () {
 		beforeEach(function () {
 			inject(function ($rootScope) {

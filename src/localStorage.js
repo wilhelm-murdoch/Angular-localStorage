@@ -39,9 +39,10 @@ angular.module('localStorage', ['ngCookies']).factory('$store', ['$parse', '$coo
 		 * Set - let's you set a new localStorage key pair set
 		 * @param key - a string that will be used as the accessor for the pair
 		 * @param value - the value of the localStorage item
+		 * @param expires - the time, in seconds, that this key will expire
 		 * @returns {*} - will return whatever it is you've stored in the local storage
 		 */
-		set: function (key, value) {
+		set: function (key, value, expires) {
 			if (!supported) {
 				try {
 					$cookieStore.put(key, value);
@@ -50,15 +51,25 @@ angular.module('localStorage', ['ngCookies']).factory('$store', ['$parse', '$coo
 					$log.log('Local Storage not supported, make sure you have angular-cookies enabled.');
 				}
 			}
-			var saver = $window.JSON.stringify(value);
+
+			var saver = {
+				v: value
+			}
+
+			if(expires) {
+				saver['e'] = (expires * 1000) + (new Date().getTime());
+			}
+
+			saver = $window.JSON.stringify(saver);
 			storage.setItem(key, saver);
 			return privateMethods.parseValue(saver);
 		},
 
 		/**
-		 * Get - let's you get the value of any pair you've stored
+		 * Get - let's you get the value of any pair you've stored. Will also determine if the value is meant to expire.
+		 *       If so, it will remove the item from loccal storage and return null.
 		 * @param key - the string that you set as accessor for the pair
-		 * @returns {*} - Object,String,Float,Boolean depending on what you stored
+		 * @returns {*} - Object,String,Float,Boolean,Null depending on what you stored
 		 */
 		get: function (key) {
 			if (!supported) {
@@ -68,8 +79,25 @@ angular.module('localStorage', ['ngCookies']).factory('$store', ['$parse', '$coo
 					return null;
 				}
 			}
+
 			var item = storage.getItem(key);
-			return privateMethods.parseValue(item);
+
+			if(!item) {
+				return null
+			}
+
+			try {
+				var parsed = $window.JSON.parse(item);
+			} catch (e) {
+				return item;
+			}
+
+			if(parsed.e && (new Date().getTime()) > parsed.e) {
+				publicMethods.remove(key);
+				return null;
+			}
+
+			return privateMethods.parseValue(parsed.v);
 		},
 
 		/**
@@ -95,18 +123,19 @@ angular.module('localStorage', ['ngCookies']).factory('$store', ['$parse', '$coo
 		 * @param $scope - the current scope you want the variable available in
 		 * @param key - the name of the variable you are binding
 		 * @param def - the default value (OPTIONAL)
+		 * @param expires - the time, in seconds, that this key will expire
 		 * @returns {*} - returns whatever the stored value is
 		 */
-		bind: function ($scope, key, def) {
+		bind: function ($scope, key, def, expires) {
 			// If no defined value for def we use empty string
 			def = (angular.isUndefined(def)) ? '' : def;
 			if (!publicMethods.get(key)) {
-				publicMethods.set(key, def);
+				publicMethods.set(key, def, expires);
 			}
 			$parse(key).assign($scope, publicMethods.get(key));
 			$scope.$watch(key, function (val) {
 				if (angular.isDefined(val)) {
-					publicMethods.set(key, val);
+					publicMethods.set(key, val, expires);
 				}
 			}, true);
 			return publicMethods.get(key);
